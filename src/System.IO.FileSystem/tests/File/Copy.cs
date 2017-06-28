@@ -12,8 +12,10 @@ namespace System.IO.Tests
     public class File_Copy_str_str : FileSystemTest
     {
         #region Utilities
+        private const char NonBreakingSpace = (char)160;
+        public static string[] WindowsInvalidUnixValid = new string[] { "\n", ">", "<", "\t" };
+        public static string[] WindowsValidWhitespace = new string[] { "         " + NonBreakingSpace, NonBreakingSpace.ToString()};
 
-        public static string[] WindowsInvalidUnixValid = new string[] { "         ", " ", "\n", ">", "<", "\t" };
         public virtual void Copy(string source, string dest)
         {
             File.Copy(source, dest);
@@ -161,8 +163,28 @@ namespace System.IO.Tests
         #region PlatformSpecific
 
         [Fact]
+        //[ActiveIssue()] Insert the Issue# later from GitHub once submit PR
         [PlatformSpecific(TestPlatforms.Windows)]  // Whitespace path throws ArgumentException
-        public void WindowsWhitespacePath()
+        public void WindowsWhitespacePath_Valid()
+        {
+            string testFile = GetTestFilePath();
+            File.Create(testFile).Dispose();
+            foreach (string valid in WindowsValidWhitespace)
+            {
+                if (PlatformDetection.IsFullFramework)
+                {
+                    Copy(testFile, Path.Combine(TestDirectory, valid));
+                }
+                else
+                {
+                    //Assert.Throws<ArgumentException>(() => Copy(testFile, valid));
+                }
+            }
+        }
+
+        [Fact]
+        [PlatformSpecific(TestPlatforms.Windows)]  // Whitespace path throws ArgumentException
+        public void WindowsWhitespacePath_Invalid()
         {
             string testFile = GetTestFilePath();
             File.Create(testFile).Dispose();

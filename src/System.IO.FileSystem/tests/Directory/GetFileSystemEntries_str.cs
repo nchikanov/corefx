@@ -11,7 +11,9 @@ namespace System.IO.Tests
     {
         #region Utilities
 
-        public static string[] WindowsInvalidUnixValid = new string[] { "         ", " ", "\n", ">", "<", "\t" };
+        private const char NonBreakingSpace = (char)160; 
+        public static string[] WindowsInvalidUnixValid = new string[] { "\n", ">", "<", "\t" };
+        public static string[] WindowsValidWhitespace = new string[] { "         "+NonBreakingSpace, NonBreakingSpace.ToString()};
         protected virtual bool TestFiles { get { return true; } }       // True if the virtual GetEntries mmethod returns files
         protected virtual bool TestDirectories { get { return true; } } // True if the virtual GetEntries mmethod returns Directories
 
@@ -207,6 +209,15 @@ namespace System.IO.Tests
             Assert.All(WindowsInvalidUnixValid, invalid =>
                 Assert.Throws<ArgumentException>(() => GetEntries(invalid)));
         }
+
+        // NINA: Is Assert.Throws correct here? We don't want it to throw when success
+        /*[Fact]
+        [PlatformSpecific(TestPlatforms.Windows)]
+        public void WindowsValidCharsPath()
+        {
+            Assert.All(WindowsValidWhitespace, valid =>
+                Assert.Throws<ArgumentException>(() => GetEntries(valid)));
+        }*/
 
         [Fact]
         [PlatformSpecific(TestPlatforms.AnyUnix)]  // Unix-only valid chars in file path

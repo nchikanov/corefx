@@ -37,9 +37,8 @@ namespace System.IO.Tests
 
         [Theory]
         [InlineData("")]
-        [InlineData(" ")]
         [InlineData("\r\n")]
-        public static void GetDirectoryName_EmptyOrWhitespace_Throws(string path)
+        public static void GetDirectoryName_Empty_Throws(string path)
         {
             Assert.Throws<ArgumentException>(() => Path.GetDirectoryName(path));
         }
@@ -286,28 +285,44 @@ namespace System.IO.Tests
         }
 
         [Fact]
-        public static void GetInvalidPathChars()
+        public static void GetInvalidPathChars_Basic()
         {
             Assert.NotNull(Path.GetInvalidPathChars());
             Assert.NotSame(Path.GetInvalidPathChars(), Path.GetInvalidPathChars());
             Assert.Equal((IEnumerable<char>)Path.GetInvalidPathChars(), Path.GetInvalidPathChars());
             Assert.True(Path.GetInvalidPathChars().Length > 0);
-            Assert.All(Path.GetInvalidPathChars(), c =>
+        }
+
+        public static TheoryData<char> InvalidPathChars
+        {
+            get
             {
-                string bad = c.ToString();
-                Assert.Throws<ArgumentException>(() => Path.ChangeExtension(bad, "ok"));
-                Assert.Throws<ArgumentException>(() => Path.Combine(bad, "ok"));
-                Assert.Throws<ArgumentException>(() => Path.Combine("ok", "ok", bad));
-                Assert.Throws<ArgumentException>(() => Path.Combine("ok", "ok", bad, "ok"));
-                Assert.Throws<ArgumentException>(() => Path.Combine(bad, bad, bad, bad, bad));
-                Assert.Throws<ArgumentException>(() => Path.GetDirectoryName(bad));
-                Assert.Throws<ArgumentException>(() => Path.GetExtension(bad));
-                Assert.Throws<ArgumentException>(() => Path.GetFileName(bad));
-                Assert.Throws<ArgumentException>(() => Path.GetFileNameWithoutExtension(bad));
-                Assert.Throws<ArgumentException>(() => Path.GetFullPath(bad));
-                Assert.Throws<ArgumentException>(() => Path.GetPathRoot(bad));
-                Assert.Throws<ArgumentException>(() => Path.IsPathRooted(bad));
-            });
+                var data = new TheoryData<char>();
+                foreach (char c in Path.GetInvalidPathChars())
+                {
+                    data.Add(c);
+                }
+                return data;
+            }
+        }
+
+        [Theory]
+        [MemberData(nameof(InvalidPathChars))]
+        public static void GetInvalidPathChars(char c)
+        {
+            string bad = c.ToString();
+            Assert.Throws<ArgumentException>(() => Path.ChangeExtension(bad, "ok"));
+            Assert.Throws<ArgumentException>(() => Path.Combine(bad, "ok"));
+            Assert.Throws<ArgumentException>(() => Path.Combine("ok", "ok", bad));
+            Assert.Throws<ArgumentException>(() => Path.Combine("ok", "ok", bad, "ok"));
+            Assert.Throws<ArgumentException>(() => Path.Combine(bad, bad, bad, bad, bad));
+            Assert.Throws<ArgumentException>(() => Path.GetDirectoryName(bad));
+            Assert.Throws<ArgumentException>(() => Path.GetExtension(bad));
+            Assert.Throws<ArgumentException>(() => Path.GetFileName(bad));
+            Assert.Throws<ArgumentException>(() => Path.GetFileNameWithoutExtension(bad));
+            Assert.Throws<ArgumentException>(() => Path.GetFullPath(bad));
+            Assert.Throws<ArgumentException>(() => Path.GetPathRoot(bad));
+            Assert.Throws<ArgumentException>(() => Path.IsPathRooted(bad));
         }
 
         [Fact]
