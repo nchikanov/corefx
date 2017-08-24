@@ -30,7 +30,7 @@ namespace System.IO
             get
             {
                 EnsureDataInitialized();
-                return (FileAttributes)_data.fileAttributes;
+                return _data.fileAttributes;
             }
             set
             {
@@ -52,7 +52,7 @@ namespace System.IO
                     // but Exists is supposed to return true or false.
                     return false;
                 }
-                return (_data.fileAttributes != -1) && ((this is DirectoryInfo) == ((_data.fileAttributes & Interop.Kernel32.FileAttributes.FILE_ATTRIBUTE_DIRECTORY) == Interop.Kernel32.FileAttributes.FILE_ATTRIBUTE_DIRECTORY));
+                return (_data.fileAttributes != (FileAttributes)(-1)) && ((this is DirectoryInfo) == ((_data.fileAttributes & FileAttributes.Directory) == FileAttributes.Directory));
             }
         }
 

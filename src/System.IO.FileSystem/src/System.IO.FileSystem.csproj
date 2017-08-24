@@ -151,9 +151,6 @@
     <Compile Include="$(CommonPath)\Interop\Windows\kernel32\Interop.FileOperations.cs">
       <Link>Common\Interop\Windows\Interop.FileOperations.cs</Link>
     </Compile>
-    <Compile Include="$(CommonPath)\Interop\Windows\kernel32\Interop.FileAttributes.cs">
-      <Link>Common\Interop\Windows\Interop.FileAttributes.cs</Link>
-    </Compile>
     <Compile Include="$(CommonPath)\Interop\Windows\kernel32\Interop.GenericOperations.cs">
       <Link>Common\Interop\Windows\Interop.GenericOperations.cs</Link>
     </Compile>
@@ -212,6 +209,12 @@
     </Compile>
     <Compile Include="$(CommonPath)\Interop\Windows\kernel32\Interop.GetFileAttributesEx.cs">
       <Link>Common\Interop\Windows\Interop.GetFileAttributesEx.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonPath)\Interop\Windows\kernel32\Interop.GetFileAttributes.cs">
+      <Link>Common\Interop\Windows\Interop.GetFileAttributes.cs</Link>
+    </Compile>
+    <Compile Include="$(CommonPath)\Interop\Windows\kernel32\Interop.GetFullPathNameW.cs">
+      <Link>Common\Interop\Windows\Interop.GetFullPathNameW.cs</Link>
     </Compile>
     <Compile Include="$(CommonPath)\Interop\Windows\kernel32\Interop.RemoveDirectory.cs">
       <Link>Common\Interop\Windows\Interop.RemoveDirectory.cs</Link>

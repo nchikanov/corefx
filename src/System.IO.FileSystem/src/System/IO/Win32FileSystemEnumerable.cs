@@ -641,14 +641,14 @@ namespace System.IO
         internal static bool IsDir(ref Interop.Kernel32.WIN32_FIND_DATA data)
         {
             // Don't add "." nor ".."
-            return (0 != (data.dwFileAttributes & Interop.Kernel32.FileAttributes.FILE_ATTRIBUTE_DIRECTORY))
+            return (0 != (data.dwFileAttributes & FileAttributes.Directory))
                                                 && !data.cFileName.FixedBufferEqualsString(".") && !data.cFileName.FixedBufferEqualsString("..");
         }
 
         [SecurityCritical]  // auto-generated
         internal static bool IsFile(ref Interop.Kernel32.WIN32_FIND_DATA data)
         {
-            return 0 == (data.dwFileAttributes & Interop.Kernel32.FileAttributes.FILE_ATTRIBUTE_DIRECTORY);
+            return 0 == (data.dwFileAttributes & FileAttributes.Directory);
         }
     }
 }

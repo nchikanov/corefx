@@ -2,13 +2,15 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.IO;
+
 internal partial class Interop
 {
     internal partial class Kernel32
     {
         internal struct WIN32_FILE_ATTRIBUTE_DATA
         {
-            internal int fileAttributes;
+            internal FileAttributes fileAttributes;
             internal uint ftCreationTimeLow;
             internal uint ftCreationTimeHigh;
             internal uint ftLastAccessTimeLow;
@@ -21,7 +23,7 @@ internal partial class Interop
             internal void PopulateFrom(ref WIN32_FIND_DATA findData)
             {
                 // Copy the information to data
-                fileAttributes = (int)findData.dwFileAttributes;
+                fileAttributes = findData.dwFileAttributes;
                 ftCreationTimeLow = findData.ftCreationTime.dwLowDateTime;
                 ftCreationTimeHigh = findData.ftCreationTime.dwHighDateTime;
                 ftLastAccessTimeLow = findData.ftLastAccessTime.dwLowDateTime;
