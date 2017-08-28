@@ -53,6 +53,7 @@ namespace System.IO.Tests
             File.Delete(testFile);
         }
 
+        /*
         [Benchmark]
         public void Delete()
         {
@@ -69,5 +70,6 @@ namespace System.IO.Tests
                         File.Delete(testFile + 1);
             }
         }
+        */
     }
 }

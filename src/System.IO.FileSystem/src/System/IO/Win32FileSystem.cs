@@ -6,6 +6,8 @@ using Microsoft.Win32.SafeHandles;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Diagnostics;
+using System.Buffers;
 
 namespace System.IO
 {
@@ -35,7 +37,8 @@ namespace System.IO
 
                     if (errorCode == Interop.Errors.ERROR_ACCESS_DENIED)
                     {
-                        if (DirectoryExists(destFullPath))
+                        ReadOnlySpan<char> span = new ReadOnlySpan<char>(destFullPath.ToCharArray());
+                        if (DirectoryExists(span))
                             throw new IOException(SR.Format(SR.Arg_FileIsDirectory_Name, destFullPath), Interop.Errors.ERROR_ACCESS_DENIED);
                     }
                 }
@@ -172,7 +175,8 @@ namespace System.IO
             }
         }
 
-        public override bool DirectoryExists(string fullPath)
+        public override bool DirectoryExists(string fullPath) => DirectoryExists(new ReadOnlySpan<char>(fullPath.ToCharArray()));
+        public override bool DirectoryExists(ReadOnlySpan<char> fullPath)
         {
             FileAttributes attributes = TryGetAttributes(fullPath);
             return attributes != (FileAttributes)(-1) && ((attributes & FileAttributes.Directory) != 0);
@@ -210,19 +214,23 @@ namespace System.IO
             }
         }
 
-        private FileAttributes TryGetAttributes(string path)
+        private FileAttributes TryGetAttributes(ReadOnlySpan<char> path)
         {
             // Neither GetFileAttributes or FindFirstFile like trailing separators
-            path = path.TrimEnd(PathHelpers.DirectorySeparatorChars);
+            if (path[path.Length - 1].Equals('\\') || path[path.Length - 1].Equals('/'))
+            {
+                // Trim directory separator chars from the end
+                path.Slice(0, path.Length - 1);
+            }
 
             using (new DisableMediaInsertionPrompt())
             {
-                FileAttributes attributes = Interop.Kernel32.GetFileAttributes(path);
+                FileAttributes attributes = Interop.Kernel32.GetFileAttributes(path.ToString());
                 if (attributes == (FileAttributes)(-1))
                 {
                     if (Marshal.GetLastWin32Error() == Interop.Errors.ERROR_ACCESS_DENIED)
                     {
-                        if (GetFindData(path, out Interop.Kernel32.WIN32_FIND_DATA findData) == Interop.Errors.ERROR_SUCCESS)
+                        if (GetFindData(path.ToString(), out Interop.Kernel32.WIN32_FIND_DATA findData) == Interop.Errors.ERROR_SUCCESS)
                             return findData.dwFileAttributes;
                     }
                 }
@@ -293,7 +301,9 @@ namespace System.IO
             return errorCode;
         }
 
-        public override bool FileExists(string fullPath)
+        public override bool FileExists(string fullPath) => FileExists(new ReadOnlySpan<char>(fullPath.ToCharArray()));
+
+        public override bool FileExists(ReadOnlySpan<char> fullPath)
         {
             FileAttributes attributes = TryGetAttributes(fullPath);
             return attributes != (FileAttributes)(-1) && ((attributes & FileAttributes.Directory) == 0);

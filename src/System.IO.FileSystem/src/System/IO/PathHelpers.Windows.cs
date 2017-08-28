@@ -120,11 +120,11 @@ namespace System.IO
                 path.Substring(0, path.Length - 1) :
                 path;
 
-        internal unsafe static string FastNormalizePath(string path)
+        internal unsafe static ReadOnlySpan<char> FastNormalizePath(string path)
         {
             // Normalizing doesn't make sense for \\?\ paths
             if (PathInternal.IsExtended(path))
-                return path;
+                return new ReadOnlySpan<char>(path.ToCharArray());
 
             uint result = Interop.Kernel32.GetFullPathNameW(path, 0, null, IntPtr.Zero);
             if (result == 0)
@@ -139,7 +139,7 @@ namespace System.IO
                 {
                     if (buffer != null)
                         ArrayPool<char>.Shared.Return(buffer);
-
+                    
                     buffer = ArrayPool<char>.Shared.Rent((int)result + CharsToReserve);
                     fixed (char* c = buffer)
                     {
@@ -156,7 +156,7 @@ namespace System.IO
                     {
                         // This is \\. convert to \\?
                         buffer[CharsToReserve + 2] = '?';
-                        return new string(buffer, 6, (int)result);
+                        return new ReadOnlySpan<char>(buffer, 6, (int)result);
                     }
                     else
                     {
@@ -168,7 +168,7 @@ namespace System.IO
                         buffer[4] = 'U';
                         buffer[5] = 'N';
                         buffer[6] = 'C';
-                        return new string(buffer, 0, (int)result + 6);
+                        return new ReadOnlySpan<char>(buffer, 0, (int)result + 6);
                     }
                 }
 
@@ -176,7 +176,7 @@ namespace System.IO
                 buffer[3] = '\\';
                 buffer[4] = '?';
                 buffer[5] = '\\';
-                return new string(buffer, 2, (int)result + 4);
+                return new ReadOnlySpan<char>(buffer, 2, (int)result + 4);
             }
             finally
             {

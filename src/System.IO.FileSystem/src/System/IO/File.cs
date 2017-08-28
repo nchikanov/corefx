@@ -191,16 +191,16 @@ namespace System.IO
                 return false;
             }
 
-            path = PathHelpers.FastNormalizePath(path);
-            if (path == null)
+            ReadOnlySpan<char> span = PathHelpers.FastNormalizePath(path);
+            if (span == null)
                 return false;
 
-            if (path.Length > 0 && PathInternal.IsDirectorySeparator(path[path.Length - 1]))
+            if (span.Length > 0 && PathInternal.IsDirectorySeparator(span[span.Length - 1]))
             {
                 return false;
             }
 
-            return FileSystem.Current.FileExists(path);
+            return FileSystem.Current.FileExists(span);
         }
 
         public static FileStream Open(string path, FileMode mode)
