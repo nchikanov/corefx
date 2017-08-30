@@ -70,11 +70,13 @@ namespace System.IO
             if (path == null || path.Length == 0)
                 return false;
 
-            ReadOnlySpan<char> span = PathHelpers.FastNormalizePath(path, allowTrailingSeparator: true);
-            if (span.Length == 0)
-                return false;
+            using (PooledCharBuffer pooledSpan = PathHelpers.FastNormalizePath(path, allowTrailingSeparator: true))
+            {
+                if (pooledSpan.IsEmpty)
+                    return false;
 
-            return FileSystem.Current.DirectoryExists(span);
+                return FileSystem.Current.DirectoryExists(pooledSpan.Span);
+            }
         }
 
         public static void SetCreationTime(string path, DateTime creationTime)

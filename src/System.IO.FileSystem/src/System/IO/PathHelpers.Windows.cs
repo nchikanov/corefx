@@ -120,14 +120,19 @@ namespace System.IO
                 path.Substring(0, path.Length - 1) :
                 path;
 
+
+
+
         /// <summary>
         /// 
         /// </summary>
         /// <param name="path"></param>
         /// <param name="allowTrailingSeparator"></param>
         /// <returns></returns>
-        internal unsafe static ReadOnlySpan<char> FastNormalizePath(string path, bool allowTrailingSeparator = false)
+        internal unsafe static PooledCharBuffer FastNormalizePath(string path, bool allowTrailingSeparator = false)
         {
+            PooledCharBuffer pooledBuffer = new PooledCharBuffer();
+
             // Normalizing doesn't make sense for \\?\ paths
             if (PathInternal.IsExtended(path))
             {
@@ -135,87 +140,181 @@ namespace System.IO
                 {
                     if (allowTrailingSeparator)
                     {
-                        char[] charPath = path.ToCharArray();
-                        charPath[charPath.Length - 1] = '\0';
-                        return new ReadOnlySpan<char>(charPath, 0, charPath.Length - 1);
+                        char[] charPath = pooledBuffer.Rent(path.Length);
+                        path.CopyTo(0, charPath, 0, path.Length - 1);
+                        charPath[path.Length - 1] = '\0';
+                        pooledBuffer.SetSlice(0, path.Length - 1);
                     }
-                    else
-                    {
-                        return ReadOnlySpan<char>.Empty;
-                    }
+
+                    return pooledBuffer;
                 }
-                return path.AsReadOnlySpan();
+
+                pooledBuffer.SetString(path);
+                return pooledBuffer;
             }
 
             uint result = Interop.Kernel32.GetFullPathNameW(path, 0, null, IntPtr.Zero);
             if (result == 0)
-                return ReadOnlySpan<char>.Empty;
+                return pooledBuffer;
 
             const int CharsToReserve = 6;
 
             char[] buffer = null;
-            try
+            do
             {
-                do
+                buffer = pooledBuffer.Rent((int)result + CharsToReserve);
+                fixed (char* c = buffer)
                 {
-                    if (buffer != null)
-                        ArrayPool<char>.Shared.Return(buffer);
-
-                    buffer = ArrayPool<char>.Shared.Rent((int)result + CharsToReserve);
-                    fixed (char* c = buffer)
-                    {
-                        result = Interop.Kernel32.GetFullPathNameW(path, (uint)buffer.Length - CharsToReserve, c + CharsToReserve, IntPtr.Zero);
-                    }
-
-                    if (result == 0)
-                        return ReadOnlySpan<char>.Empty;
-                } while (result > buffer.Length);
-
-                if (buffer[CharsToReserve + result - 1] == '\\')
-                {
-                    if (allowTrailingSeparator)
-                    {
-                        buffer[CharsToReserve + result - 1] = '\0';
-                    }
-                    else
-                    {
-                        return ReadOnlySpan<char>.Empty;
-                    }
+                    result = Interop.Kernel32.GetFullPathNameW(path, (uint)buffer.Length - CharsToReserve, c + CharsToReserve, IntPtr.Zero);
                 }
 
-                if (buffer.Length > CharsToReserve + 2 && buffer[CharsToReserve] == '\\' && buffer[CharsToReserve + 1] == '\\')
+                if (result == 0)
                 {
-                    if (buffer[CharsToReserve + 2] == '.')
-                    {
-                        // This is \\. convert to \\?
-                        buffer[CharsToReserve + 2] = '?';
-                        return new ReadOnlySpan<char>(buffer, 6, (int)result);
-                    }
-                    else
-                    {
-                        // UNC convert to \\
-                        buffer[0] = '\\';
-                        buffer[1] = '\\';
-                        buffer[2] = '?';
-                        buffer[3] = '\\';
-                        buffer[4] = 'U';
-                        buffer[5] = 'N';
-                        buffer[6] = 'C';
-                        return new ReadOnlySpan<char>(buffer, 0, (int)result + 6);
-                    }
+                    pooledBuffer.SetSlice(0, 0);
+                    return pooledBuffer;
                 }
+            } while (result > buffer.Length);
 
-                buffer[2] = '\\';
-                buffer[3] = '\\';
-                buffer[4] = '?';
-                buffer[5] = '\\';
-                return new ReadOnlySpan<char>(buffer, 2, (int)result + 4);
-            }
-            finally
+            if (buffer[CharsToReserve + result - 1] == '\\')
             {
-                if (buffer != null)
-                    ArrayPool<char>.Shared.Return(buffer);
+                if (allowTrailingSeparator)
+                {
+                    buffer[CharsToReserve + result - 1] = '\0';
+                }
+                else
+                {
+                    pooledBuffer.SetSlice(0, 0);
+                    return pooledBuffer;
+                }
             }
+
+            if (buffer.Length > CharsToReserve + 2 && buffer[CharsToReserve] == '\\' && buffer[CharsToReserve + 1] == '\\')
+            {
+                if (buffer[CharsToReserve + 2] == '.')
+                {
+                    // This is \\. convert to \\?
+                    buffer[CharsToReserve + 2] = '?';
+                    pooledBuffer.SetSlice(6, (int)result);
+                    return pooledBuffer;
+                }
+                else
+                {
+                    // UNC convert to \\
+                    buffer[0] = '\\';
+                    buffer[1] = '\\';
+                    buffer[2] = '?';
+                    buffer[3] = '\\';
+                    buffer[4] = 'U';
+                    buffer[5] = 'N';
+                    buffer[6] = 'C';
+                    pooledBuffer.SetSlice(0, (int)result + 6);
+                    return pooledBuffer;
+                }
+            }
+
+            buffer[2] = '\\';
+            buffer[3] = '\\';
+            buffer[4] = '?';
+            buffer[5] = '\\';
+            pooledBuffer.SetSlice(2, (int)result + 4);
+            return pooledBuffer;
         }
     }
+
+    internal struct PooledCharBuffer : IDisposable
+    {
+        public char[] _buffer;
+        private int _start;
+        private int _length;
+        private string _string;
+
+        public char[] Rent(int minimumLength)
+        {
+            if (_buffer != null)
+                ArrayPool<char>.Shared.Return(_buffer);
+            return _buffer = ArrayPool<char>.Shared.Rent(minimumLength);
+        }
+
+        public void SetSlice(int start)
+        {
+            Debug.Assert(_buffer != null, "should have a buffer");
+            _start = start;
+            _length = _buffer.Length;
+        }
+
+        public void SetSlice(int start, int length)
+        {
+            Debug.Assert(_buffer != null, "should have a buffer");
+            _start = start;
+            _length = length;
+        }
+
+        public void SetString(string value)
+        {
+            Debug.Assert(_buffer == null, "should NOT have a buffer");
+            _string = value;
+            _length = value.Length;
+        }
+
+        public void Dispose()
+        {
+            if (_buffer != null)
+                ArrayPool<char>.Shared.Return(_buffer);
+            _buffer = null;
+            _length = 0;
+        }
+
+        public ReadOnlySpan<char> Span
+        {
+            get
+            {
+                Debug.Assert(_buffer == null || _string == null, "shouldn't have a char buffer and a string");
+                return _string != null
+                    ? _string.AsReadOnlySpan()
+                    : new ReadOnlySpan<char>(_buffer, _start, _length);
+            }
+        }
+ 
+        public bool IsEmpty => _length == 0;
+    }
+
+    //internal struct PooledBufferSpan : IDisposable
+    //{
+    //    public ReadOnlySpan<char> Span;
+    //    public char[] Buffer;
+
+    //    public PooledBufferSpan(char[] buffer)
+    //    {
+    //        Span = buffer == null ? ReadOnlySpan<char>.Empty : new ReadOnlySpan<char>(buffer);
+    //        Buffer = buffer;
+    //    }
+
+    //    public PooledBufferSpan(char[] buffer, int start)
+    //    {
+    //        Span = new ReadOnlySpan<char>(buffer, start);
+    //        Buffer = buffer;
+    //    }
+
+    //    public PooledBufferSpan(char[] buffer, int start, int length)
+    //    {
+    //        Span = new ReadOnlySpan<char>(buffer, start, length);
+    //        Buffer = buffer;
+    //    }
+
+    //    public PooledBufferSpan(string buffer)
+    //    {
+    //        Span = buffer.ToCharArray();
+    //        Buffer = null;
+    //    }
+
+    //    public static PooledBufferSpan Empty = new PooledBufferSpan((char[])null);
+
+    //    public void Dispose()
+    //    {
+    //        if (Buffer != null)
+    //            ArrayPool<char>.Shared.Return(Buffer);
+    //    }
+
+    //    public bool IsEmpty => Span.Length == 0;
+    //}
 }
