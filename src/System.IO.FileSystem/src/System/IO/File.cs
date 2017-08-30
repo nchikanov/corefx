@@ -181,38 +181,14 @@ namespace System.IO
         [System.Security.SecuritySafeCritical]
         public static bool Exists(string path)
         {
-            try
-            {
-                if (path == null)
-                    return false;
-                if (path.Length == 0)
-                    return false;
+            if (path == null || path.Length == 0 || PathInternal.IsDirectorySeparator(path[path.Length - 1]))
+                return false;
 
-                path = Path.GetFullPath(path);
-                // After normalizing, check whether path ends in directory separator.
-                // Otherwise, FillAttributeInfo removes it and we may return a false positive.
-                // GetFullPath should never return null
-                Debug.Assert(path != null, "File.Exists: GetFullPath returned null");
-                if (path.Length > 0 && PathInternal.IsDirectorySeparator(path[path.Length - 1]))
-                {
-                    return false;
-                }
+            ReadOnlySpan<char> span = PathHelpers.FastNormalizePath(path);
+            if (span.Length == 0)
+                return false;
 
-                return InternalExists(path);
-            }
-            catch (ArgumentException) { }
-            catch (NotSupportedException) { } // Security can throw this on ":"
-            catch (SecurityException) { }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
-
-            return false;
-        }
-
-        [System.Security.SecurityCritical]  // auto-generated
-        internal static bool InternalExists(string path)
-        {
-            return FileSystem.Current.FileExists(path);
+            return FileSystem.Current.FileExists(span);
         }
 
         public static FileStream Open(string path, FileMode mode)
@@ -689,7 +665,7 @@ namespace System.IO
             string fullSourceFileName = Path.GetFullPath(sourceFileName);
             string fullDestFileName = Path.GetFullPath(destFileName);
 
-            if (!InternalExists(fullSourceFileName))
+            if (!File.Exists(fullSourceFileName))
             {
                 throw new FileNotFoundException(SR.Format(SR.IO_FileNotFound_FileName, fullSourceFileName), fullSourceFileName);
             }

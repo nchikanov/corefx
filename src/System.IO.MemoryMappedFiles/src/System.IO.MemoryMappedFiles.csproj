@@ -75,9 +75,6 @@
     <Compile Include="$(CommonPath)\Interop\Windows\kernel32\Interop.FormatMessage.cs">
       <Link>Common\Interop\Windows\Interop.FormatMessage.cs</Link>
     </Compile>
-    <Compile Include="$(CommonPath)\Interop\Windows\kernel32\Interop.FileAttributes.cs">
-      <Link>Common\Interop\Windows\Interop.FileAttributes.cs</Link>
-    </Compile>
     <Compile Include="$(CommonPath)\Interop\Windows\kernel32\Interop.FileOperations.cs">
       <Link>Common\Interop\Windows\Interop.FileOperations.cs</Link>
     </Compile>

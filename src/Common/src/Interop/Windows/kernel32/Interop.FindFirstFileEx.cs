@@ -14,15 +14,21 @@ internal partial class Interop
         /// <summary>
         /// WARNING: This method does not implicitly handle long paths. Use FindFirstFile.
         /// </summary>
-        [DllImport(Libraries.Kernel32, EntryPoint = "FindFirstFileExW", SetLastError = true, CharSet = CharSet.Unicode, BestFitMapping = false)]
-        private static extern SafeFindHandle FindFirstFileExPrivate(string lpFileName, FINDEX_INFO_LEVELS fInfoLevelId, ref WIN32_FIND_DATA lpFindFileData, FINDEX_SEARCH_OPS fSearchOp, IntPtr lpSearchFilter, int dwAdditionalFlags);
+        [DllImport(Libraries.Kernel32, SetLastError = true, CharSet = CharSet.Unicode, BestFitMapping = false)]
+        internal unsafe static extern SafeFindHandle FindFirstFileExW(ref char lpFileName, FINDEX_INFO_LEVELS fInfoLevelId, ref WIN32_FIND_DATA lpFindFileData, FINDEX_SEARCH_OPS fSearchOp, IntPtr lpSearchFilter, int dwAdditionalFlags);
 
-        internal static SafeFindHandle FindFirstFile(string fileName, ref WIN32_FIND_DATA data)
+        internal unsafe static SafeFindHandle FindFirstFile(ReadOnlySpan<char> fileName, ref WIN32_FIND_DATA data)
+        {
+            // use FindExInfoBasic since we don't care about short name and it has better perf
+            return FindFirstFileExW(ref fileName.DangerousGetPinnableReference(), FINDEX_INFO_LEVELS.FindExInfoBasic, ref data, FINDEX_SEARCH_OPS.FindExSearchNameMatch, IntPtr.Zero, 0);
+        }
+
+        internal unsafe static SafeFindHandle FindFirstFile(string fileName, ref WIN32_FIND_DATA data)
         {
             fileName = PathInternal.EnsureExtendedPrefixOverMaxPath(fileName);
 
             // use FindExInfoBasic since we don't care about short name and it has better perf
-            return FindFirstFileExPrivate(fileName, FINDEX_INFO_LEVELS.FindExInfoBasic, ref data, FINDEX_SEARCH_OPS.FindExSearchNameMatch, IntPtr.Zero, 0);
+            return FindFirstFileExW(ref fileName.AsReadOnlySpan().DangerousGetPinnableReference(), FINDEX_INFO_LEVELS.FindExInfoBasic, ref data, FINDEX_SEARCH_OPS.FindExSearchNameMatch, IntPtr.Zero, 0);
         }
     }
 }

@@ -8,19 +8,39 @@ namespace System.IO.Tests
 {
     public class Perf_File : FileSystemTest
     {
-        [Benchmark]
-        public void Exists()
+        [Benchmark(InnerIterationCount = 20000)]
+        public void Exists_True()
         {
-            // Setup
             string testFile = GetTestFilePath();
             File.Create(testFile).Dispose();
+            Exists(testFile);
+        }
 
+        [Benchmark(InnerIterationCount = 20000)]
+        public void Exists_False()
+        {
+            string testFile = GetTestFilePath();
+            Exists(testFile);
+        }
+
+        [Benchmark(InnerIterationCount = 20000)]
+        public void Exists_True_LongPath()
+        {
+            string directory = IOServices.GetPath(GetTestFilePath(), 1000);
+            Directory.CreateDirectory(directory);
+            string testFile = Path.Combine(directory, GetTestFileName());
+            File.Create(testFile).Dispose();
+            Exists(testFile);
+        }
+
+        public void Exists(string testFile)
+        {
             foreach (var iteration in Benchmark.Iterations)
             {
                 // Actual perf testing
                 using (iteration.StartMeasurement())
                 {
-                    for (int i = 0; i < 20000; i++)
+                    for (int i = 0; i < Benchmark.InnerIterationCount; i++)
                     {
                         File.Exists(testFile); File.Exists(testFile); File.Exists(testFile);
                         File.Exists(testFile); File.Exists(testFile); File.Exists(testFile);
@@ -33,6 +53,7 @@ namespace System.IO.Tests
             File.Delete(testFile);
         }
 
+        /*
         [Benchmark]
         public void Delete()
         {
@@ -48,6 +69,6 @@ namespace System.IO.Tests
                     for (int i = 0; i < 10000; i++)
                         File.Delete(testFile + 1);
             }
-        }
+        }*/
     }
 }

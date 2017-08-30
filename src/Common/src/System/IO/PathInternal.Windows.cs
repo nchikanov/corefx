@@ -117,9 +117,12 @@ namespace System.IO
                 return path;
 
             // Given \\server\share in longpath becomes \\?\UNC\server\share
+            // TODO: Write function that will check if Span starts with the UNC Path Prefix ("\\")
+            //       Ignores ordinal casing...Then inserts starting at index 2: "?\UNC\"
             if (path.StartsWith(UncPathPrefix, StringComparison.OrdinalIgnoreCase))
                 return path.Insert(2, PathInternal.UncExtendedPrefixToInsert);
 
+            // TODO: Span-method to return "\\?\" + path from above
             return PathInternal.ExtendedPathPrefix + path;
         }
 
@@ -194,6 +197,16 @@ namespace System.IO
             // Question mark is part of dos device syntax so we have to skip if we are
             int startIndex = PathInternal.IsDevice(path) ? ExtendedPathPrefix.Length : 0;
 
+
+            // TODO: Write Span method that will report zero-based index of first occurrence
+            // in this instance of any character specified in s_wildcardChars starting at startIndex
+            // The 3 parameter one examines a specified number of character positions
+
+            // NOTE:
+            // private static readonly char[] s_wildcardChars =
+            // {
+            //     '\"', '<', '>', '*', '?'
+            // };
             return path.IndexOfAny(s_wildcardChars, startIndex) >= 0;
         }
 

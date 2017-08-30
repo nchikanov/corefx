@@ -67,24 +67,14 @@ namespace System.IO
         [System.Security.SecuritySafeCritical]  // auto-generated
         public static bool Exists(string path)
         {
-            try
-            {
-                if (path == null)
-                    return false;
-                if (path.Length == 0)
-                    return false;
+            if (path == null || path.Length == 0)
+                return false;
 
-                string fullPath = Path.GetFullPath(path);
+            ReadOnlySpan<char> span = PathHelpers.FastNormalizePath(path, allowTrailingSeparator: true);
+            if (span.Length == 0)
+                return false;
 
-                return FileSystem.Current.DirectoryExists(fullPath);
-            }
-            catch (ArgumentException) { }
-            catch (NotSupportedException) { }  // Security can throw this on ":"
-            catch (SecurityException) { }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
-
-            return false;
+            return FileSystem.Current.DirectoryExists(span);
         }
 
         public static void SetCreationTime(string path, DateTime creationTime)
@@ -550,10 +540,10 @@ namespace System.IO
 
             // Windows will throw if the source file/directory doesn't exist, we preemptively check
             // to make sure our cross platform behavior matches NetFX behavior.
-            if (!FileSystem.Current.DirectoryExists(fullsourceDirName) && !FileSystem.Current.FileExists(fullsourceDirName))
+            if (!Exists(fullsourceDirName) && !File.Exists(fullsourceDirName))
                 throw new DirectoryNotFoundException(SR.Format(SR.IO_PathNotFound_Path, fullsourceDirName));
             
-            if (FileSystem.Current.DirectoryExists(fulldestDirName))
+            if (Exists(fulldestDirName))
                 throw new IOException(SR.Format(SR.IO_AlreadyExists_Name, fulldestDirName));
 
             FileSystem.Current.MoveDirectory(fullsourceDirName, fulldestDirName);

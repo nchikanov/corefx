@@ -6,6 +6,8 @@ using Microsoft.Win32.SafeHandles;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Diagnostics;
+using System.Buffers;
 
 namespace System.IO
 {
@@ -63,7 +65,7 @@ namespace System.IO
             // to create c:\Foo\Bar\Baz, where everything already exists but ACLS prevent access to c:\Foo
             // and c:\Foo\Bar.  In that case, this code will think it needs to create c:\Foo, and c:\Foo\Bar
             // and fail to due so, causing an exception to be thrown.  This is not what we want.
-            if (DirectoryExists(fullPath))
+            if (Directory.Exists(fullPath))
                 return;
 
             List<string> stackDir = new List<string>();
@@ -134,7 +136,7 @@ namespace System.IO
                     else
                     {
                         // If there's a file in this directory's place, or if we have ERROR_ACCESS_DENIED when checking if the directory already exists throw.
-                        if (File.InternalExists(name) || (!DirectoryExists(name, out currentError) && currentError == Interop.Errors.ERROR_ACCESS_DENIED))
+                        if (FileExists(name) || (!DirectoryExists(name, out currentError) && currentError == Interop.Errors.ERROR_ACCESS_DENIED))
                         {
                             firstError = currentError;
                             errorString = name;
@@ -172,19 +174,21 @@ namespace System.IO
             }
         }
 
-        public override bool DirectoryExists(string fullPath)
+        public override bool DirectoryExists(ReadOnlySpan<char> fullPath)
         {
-            int lastError = Interop.Errors.ERROR_SUCCESS;
-            return DirectoryExists(fullPath, out lastError);
+            FileAttributes attributes = TryGetAttributes(fullPath);
+            return attributes != (FileAttributes)(-1) && ((attributes & FileAttributes.Directory) != 0);
         }
+
+        private bool DirectoryExists(string fullPath) => DirectoryExists(PathHelpers.TrimEndingDirectorySeparator(fullPath).AsReadOnlySpan());
 
         private bool DirectoryExists(string path, out int lastError)
         {
             Interop.Kernel32.WIN32_FILE_ATTRIBUTE_DATA data = new Interop.Kernel32.WIN32_FILE_ATTRIBUTE_DATA();
             lastError = FillAttributeInfo(path, ref data, returnErrorOnNotFound: true);
 
-            return (lastError == 0) && (data.fileAttributes != -1)
-                    && ((data.fileAttributes & Interop.Kernel32.FileAttributes.FILE_ATTRIBUTE_DIRECTORY) != 0);
+            return (lastError == 0) && (data.fileAttributes != (FileAttributes)(-1))
+                    && ((data.fileAttributes & FileAttributes.Directory) != 0);
         }
 
         public override IEnumerable<string> EnumeratePaths(string fullPath, string searchPattern, SearchOption searchOption, SearchTarget searchTarget)
@@ -210,6 +214,49 @@ namespace System.IO
             }
         }
 
+        private unsafe FileAttributes TryGetAttributes(ReadOnlySpan<char> path)
+        {
+            // Neither GetFileAttributes or FindFirstFile like trailing separators
+            Debug.Assert(path.Length > 0, "Path should not be empty");
+            Debug.Assert(path[path.Length - 1] != '\\', "Path should not end in separator");
+
+            using (new DisableMediaInsertionPrompt())
+            {
+                FileAttributes attributes = Interop.Kernel32.GetFileAttributesW(ref path.DangerousGetPinnableReference());
+
+                if (attributes == (FileAttributes)(-1))
+                {
+                    if (Marshal.GetLastWin32Error() == Interop.Errors.ERROR_ACCESS_DENIED)
+                    {
+                        if (GetFindData(path, out Interop.Kernel32.WIN32_FIND_DATA findData) == Interop.Errors.ERROR_SUCCESS)
+                            return findData.dwFileAttributes;
+                    }
+                }
+                return attributes;
+            }
+        }
+
+        private static int GetFindData(ReadOnlySpan<char> path, out Interop.Kernel32.WIN32_FIND_DATA data)
+        {
+            // Files that are marked for deletion will not let you GetFileAttributes,
+            // ERROR_ACCESS_DENIED is given back without filling out the data struct.
+            // FindFirstFile, however, will. Historically we always gave back attributes
+            // for marked-for-deletion files.
+
+            data = new Interop.Kernel32.WIN32_FIND_DATA();
+            using (SafeFindHandle handle = Interop.Kernel32.FindFirstFile(path, ref data))
+            {
+                if (handle.IsInvalid)
+                {
+                    return Marshal.GetLastWin32Error();
+                }
+                else
+                {
+                    return Interop.Errors.ERROR_SUCCESS;
+                }
+            }
+        }
+
         /// <summary>
         /// Returns 0 on success, otherwise a Win32 error code.  Note that
         /// classes should use -1 as the uninitialized state for dataInitialized.
@@ -230,24 +277,8 @@ namespace System.IO
                     errorCode = Marshal.GetLastWin32Error();
                     if (errorCode == Interop.Errors.ERROR_ACCESS_DENIED)
                     {
-                        // Files that are marked for deletion will not let you GetFileAttributes,
-                        // ERROR_ACCESS_DENIED is given back without filling out the data struct.
-                        // FindFirstFile, however, will. Historically we always gave back attributes
-                        // for marked-for-deletion files.
-
-                        var findData = new Interop.Kernel32.WIN32_FIND_DATA();
-                        using (SafeFindHandle handle = Interop.Kernel32.FindFirstFile(path, ref findData))
-                        {
-                            if (handle.IsInvalid)
-                            {
-                                errorCode = Marshal.GetLastWin32Error();
-                            }
-                            else
-                            {
-                                errorCode = Interop.Errors.ERROR_SUCCESS;
-                                data.PopulateFrom(ref findData);
-                            }
-                        }
+                        errorCode = GetFindData(path.AsReadOnlySpan(), out Interop.Kernel32.WIN32_FIND_DATA findData);
+                        data.PopulateFrom(ref findData);
                     }
                 }
             }
@@ -260,7 +291,7 @@ namespace System.IO
                     case Interop.Errors.ERROR_PATH_NOT_FOUND:
                     case Interop.Errors.ERROR_NOT_READY: // Removable media not ready
                         // Return default value for backward compatibility
-                        data.fileAttributes = -1;
+                        data.fileAttributes = (FileAttributes)(-1);
                         return Interop.Errors.ERROR_SUCCESS;
                 }
             }
@@ -268,13 +299,12 @@ namespace System.IO
             return errorCode;
         }
 
-        public override bool FileExists(string fullPath)
-        {
-            Interop.Kernel32.WIN32_FILE_ATTRIBUTE_DATA data = new Interop.Kernel32.WIN32_FILE_ATTRIBUTE_DATA();
-            int errorCode = FillAttributeInfo(fullPath, ref data, returnErrorOnNotFound: true);
+        private bool FileExists(string fullPath) => FileExists(fullPath.AsReadOnlySpan());
 
-            return (errorCode == 0) && (data.fileAttributes != -1)
-                    && ((data.fileAttributes & Interop.Kernel32.FileAttributes.FILE_ATTRIBUTE_DIRECTORY) == 0);
+        public override bool FileExists(ReadOnlySpan<char> fullPath)
+        {
+            FileAttributes attributes = TryGetAttributes(fullPath);
+            return attributes != (FileAttributes)(-1) && ((attributes & FileAttributes.Directory) == 0);
         }
 
         public override FileAttributes GetAttributes(string fullPath)
@@ -284,7 +314,7 @@ namespace System.IO
             if (errorCode != 0)
                 throw Win32Marshal.GetExceptionForWin32Error(errorCode, fullPath);
 
-            return (FileAttributes)data.fileAttributes;
+            return data.fileAttributes;
         }
 
         public override string GetCurrentDirectory()
@@ -462,7 +492,7 @@ namespace System.IO
 
                 do
                 {
-                    if ((findData.dwFileAttributes & Interop.Kernel32.FileAttributes.FILE_ATTRIBUTE_DIRECTORY) == 0)
+                    if ((findData.dwFileAttributes & FileAttributes.Directory) == 0)
                     {
                         // File
                         string fileName = findData.cFileName.GetStringFromFixedBuffer();
@@ -484,7 +514,7 @@ namespace System.IO
                             continue;
 
                         string fileName = findData.cFileName.GetStringFromFixedBuffer();
-                        if ((findData.dwFileAttributes & (int)FileAttributes.ReparsePoint) == 0)
+                        if ((findData.dwFileAttributes & FileAttributes.ReparsePoint) == 0)
                         {
                             // Not a reparse point, recurse.
                             try

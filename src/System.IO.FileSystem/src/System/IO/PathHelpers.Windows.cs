@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System.Buffers;
 using System.Diagnostics;
 
 namespace System.IO
@@ -118,5 +119,103 @@ namespace System.IO
             EndsInDirectorySeparator(path) ?
                 path.Substring(0, path.Length - 1) :
                 path;
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="allowTrailingSeparator"></param>
+        /// <returns></returns>
+        internal unsafe static ReadOnlySpan<char> FastNormalizePath(string path, bool allowTrailingSeparator = false)
+        {
+            // Normalizing doesn't make sense for \\?\ paths
+            if (PathInternal.IsExtended(path))
+            {
+                if (path[path.Length - 1] == '\\')
+                {
+                    if (allowTrailingSeparator)
+                    {
+                        char[] charPath = path.ToCharArray();
+                        charPath[charPath.Length - 1] = '\0';
+                        return new ReadOnlySpan<char>(charPath, 0, charPath.Length - 1);
+                    }
+                    else
+                    {
+                        return ReadOnlySpan<char>.Empty;
+                    }
+                }
+                return path.AsReadOnlySpan();
+            }
+
+            uint result = Interop.Kernel32.GetFullPathNameW(path, 0, null, IntPtr.Zero);
+            if (result == 0)
+                return ReadOnlySpan<char>.Empty;
+
+            const int CharsToReserve = 6;
+
+            char[] buffer = null;
+            try
+            {
+                do
+                {
+                    if (buffer != null)
+                        ArrayPool<char>.Shared.Return(buffer);
+
+                    buffer = ArrayPool<char>.Shared.Rent((int)result + CharsToReserve);
+                    fixed (char* c = buffer)
+                    {
+                        result = Interop.Kernel32.GetFullPathNameW(path, (uint)buffer.Length - CharsToReserve, c + CharsToReserve, IntPtr.Zero);
+                    }
+
+                    if (result == 0)
+                        return ReadOnlySpan<char>.Empty;
+                } while (result > buffer.Length);
+
+                if (buffer[CharsToReserve + result - 1] == '\\')
+                {
+                    if (allowTrailingSeparator)
+                    {
+                        buffer[CharsToReserve + result - 1] = '\0';
+                    }
+                    else
+                    {
+                        return ReadOnlySpan<char>.Empty;
+                    }
+                }
+
+                if (buffer.Length > CharsToReserve + 2 && buffer[CharsToReserve] == '\\' && buffer[CharsToReserve + 1] == '\\')
+                {
+                    if (buffer[CharsToReserve + 2] == '.')
+                    {
+                        // This is \\. convert to \\?
+                        buffer[CharsToReserve + 2] = '?';
+                        return new ReadOnlySpan<char>(buffer, 6, (int)result);
+                    }
+                    else
+                    {
+                        // UNC convert to \\
+                        buffer[0] = '\\';
+                        buffer[1] = '\\';
+                        buffer[2] = '?';
+                        buffer[3] = '\\';
+                        buffer[4] = 'U';
+                        buffer[5] = 'N';
+                        buffer[6] = 'C';
+                        return new ReadOnlySpan<char>(buffer, 0, (int)result + 6);
+                    }
+                }
+
+                buffer[2] = '\\';
+                buffer[3] = '\\';
+                buffer[4] = '?';
+                buffer[5] = '\\';
+                return new ReadOnlySpan<char>(buffer, 2, (int)result + 4);
+            }
+            finally
+            {
+                if (buffer != null)
+                    ArrayPool<char>.Shared.Return(buffer);
+            }
+        }
     }
 }
