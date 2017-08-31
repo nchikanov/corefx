@@ -542,7 +542,7 @@ namespace System.IO
 
             // Windows will throw if the source file/directory doesn't exist, we preemptively check
             // to make sure our cross platform behavior matches NetFX behavior.
-            if (!Exists(fullsourceDirName) && !File.Exists(fullsourceDirName))
+            if (!Exists(fullsourceDirName) && !File.Exists(fullsourceDirName, true))
                 throw new DirectoryNotFoundException(SR.Format(SR.IO_PathNotFound_Path, fullsourceDirName));
             
             if (Exists(fulldestDirName))

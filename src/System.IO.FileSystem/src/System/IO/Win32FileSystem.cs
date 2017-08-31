@@ -37,7 +37,7 @@ namespace System.IO
 
                     if (errorCode == Interop.Errors.ERROR_ACCESS_DENIED)
                     {
-                        if (DirectoryExists(destFullPath))
+                        if (Directory.Exists(destFullPath))
                             throw new IOException(SR.Format(SR.Arg_FileIsDirectory_Name, destFullPath), Interop.Errors.ERROR_ACCESS_DENIED);
                     }
                 }
@@ -93,7 +93,7 @@ namespace System.IO
                 {
                     string dir = fullPath.Substring(0, i + 1);
 
-                    if (!DirectoryExists(dir)) // Create only the ones missing
+                    if (!Directory.Exists(dir)) // Create only the ones missing
                         stackDir.Add(dir);
                     else
                         somepathexists = true;
@@ -150,7 +150,7 @@ namespace System.IO
             if ((count == 0) && !somepathexists)
             {
                 string root = Directory.InternalGetDirectoryRoot(fullPath);
-                if (!DirectoryExists(root))
+                if (!Directory.Exists(root))
                     throw Win32Marshal.GetExceptionForWin32Error(Interop.Errors.ERROR_PATH_NOT_FOUND, root);
                 return;
             }
@@ -180,10 +180,11 @@ namespace System.IO
             return attributes != (FileAttributes)(-1) && ((attributes & FileAttributes.Directory) != 0);
         }
 
-        private bool DirectoryExists(string fullPath) => DirectoryExists(PathHelpers.TrimEndingDirectorySeparator(fullPath).AsReadOnlySpan());
+        private bool DirectoryExists(string fullPath) => Directory.Exists(fullPath);
 
         private bool DirectoryExists(string path, out int lastError)
         {
+            path = PathHelpers.TrimEndingDirectorySeparator(path);
             Interop.Kernel32.WIN32_FILE_ATTRIBUTE_DATA data = new Interop.Kernel32.WIN32_FILE_ATTRIBUTE_DATA();
             lastError = FillAttributeInfo(path, ref data, returnErrorOnNotFound: true);
 
@@ -216,9 +217,10 @@ namespace System.IO
 
         private unsafe FileAttributes TryGetAttributes(ReadOnlySpan<char> path)
         {
-            // Neither GetFileAttributes or FindFirstFile like trailing separators
             Debug.Assert(path.Length > 0, "Path should not be empty");
-            Debug.Assert(path[path.Length - 1] != '\\', "Path should not end in separator");
+
+            // TODO: Add clarifying comment, come back here
+            // Debug.Assert(path.Length < 3 || (path[path.Length - 1] != '\\' || path[path.Length - 2] == '\\'), "Path should not end in separator");
 
             using (new DisableMediaInsertionPrompt())
             {

@@ -133,10 +133,17 @@ namespace System.IO
         {
             PooledCharBuffer pooledBuffer = new PooledCharBuffer();
 
+            // Nulls are never valid in paths and result in unexpected behavior when calling Win32 APIs
+            // as they mark the end of the string
+            if (path.IndexOf('\0') != -1)
+                return pooledBuffer;
+
             // Normalizing doesn't make sense for \\?\ paths
             if (PathInternal.IsExtended(path))
             {
-                if (path[path.Length - 1] == '\\')
+                // TODO: Can we just always ignore these? E.g. allow a breaking change
+                if (path.Length > PathInternal.ExtendedPathPrefix.Length
+                    && path[path.Length - 1] == '\\' && path[path.Length -2] != ':')
                 {
                     if (allowTrailingSeparator)
                     {
@@ -153,9 +160,11 @@ namespace System.IO
                 return pooledBuffer;
             }
 
-            uint result = Interop.Kernel32.GetFullPathNameW(path, 0, null, IntPtr.Zero);
-            if (result == 0)
-                return pooledBuffer;
+            // TODO: Try with and without initial call for length (perf)
+            uint result = 260;
+            //uint result = Interop.Kernel32.GetFullPathNameW(path, 0, null, IntPtr.Zero);
+            //if (result == 0)
+            //    return pooledBuffer;
 
             const int CharsToReserve = 6;
 
@@ -179,7 +188,12 @@ namespace System.IO
             {
                 if (allowTrailingSeparator)
                 {
-                    buffer[CharsToReserve + result - 1] = '\0';
+                    // C:\ is a special case, we can't remove the trailing slash in \\?\ format.
+                    // There is no valid path that can come back at 3 characters other than C:\
+                    if (result != 3)
+                    {
+                        buffer[CharsToReserve + --result] = '\0';
+                    }
                 }
                 else
                 {
@@ -197,7 +211,7 @@ namespace System.IO
                     pooledBuffer.SetSlice(6, (int)result);
                     return pooledBuffer;
                 }
-                else
+                else if (buffer[CharsToReserve + 2] != '\\')
                 {
                     // UNC convert to \\
                     buffer[0] = '\\';

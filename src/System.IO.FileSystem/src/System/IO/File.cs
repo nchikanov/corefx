@@ -181,14 +181,21 @@ namespace System.IO
         [System.Security.SecuritySafeCritical]
         public static bool Exists(string path)
         {
-            if (path == null || path.Length == 0 || PathInternal.IsDirectorySeparator(path[path.Length - 1]))
+            return Exists(path, false);
+        }
+
+        internal static bool Exists(string path, bool allowTrailingSeparator)
+        {
+            if (path == null || path.Length == 0 || (!allowTrailingSeparator && PathInternal.IsDirectorySeparator(path[path.Length - 1])))
                 return false;
 
-            ReadOnlySpan<char> span = PathHelpers.FastNormalizePath(path);
-            if (span.Length == 0)
-                return false;
+            using (PooledCharBuffer pooledSpan = PathHelpers.FastNormalizePath(path, allowTrailingSeparator))
+            {
+                if (pooledSpan.IsEmpty)
+                    return false;
 
-            return FileSystem.Current.FileExists(span);
+                return FileSystem.Current.FileExists(pooledSpan.Span);
+            }
         }
 
         public static FileStream Open(string path, FileMode mode)
