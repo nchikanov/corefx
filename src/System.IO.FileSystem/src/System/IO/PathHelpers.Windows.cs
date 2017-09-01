@@ -202,6 +202,10 @@ namespace System.IO
                 }
             }
 
+#if NO_PREFIX
+            pooledBuffer.SetSlice(CharsToReserve, (int)result);
+            return pooledBuffer;
+#else 
             if (buffer.Length > CharsToReserve + 2 && buffer[CharsToReserve] == '\\' && buffer[CharsToReserve + 1] == '\\')
             {
                 if (buffer[CharsToReserve + 2] == '.')
@@ -232,6 +236,7 @@ namespace System.IO
             buffer[5] = '\\';
             pooledBuffer.SetSlice(2, (int)result + 4);
             return pooledBuffer;
+#endif
         }
     }
 
